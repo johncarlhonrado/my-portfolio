@@ -1,0 +1,1 @@
+Global design tokens and component styles live in `app/globals.css` (Next.js App Router convention). This folder is kept as a placeholder in case you want to split styles further (e.g. per-section CSS modules) as the project grows.
