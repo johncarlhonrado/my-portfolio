@@ -6,7 +6,7 @@ export interface SocialLink {
 
 export const socialLinks: SocialLink[] = [
   { label: "GitHub", href: "https://github.com/johncarlhonrado", icon: "github" },
-  { label: "LinkedIn", href: "www.linkedin.com/in/honrado-john-carl-c-229908386", icon: "linkedin" },
+  { label: "LinkedIn", href: "https://www.linkedin.com/in/honrado-john-carl-c-229908386/", icon: "linkedin" },
   { label: "Facebook", href: "https://www.facebook.com/johncarl.honrado", icon: "facebook" },
 ];
 
@@ -15,6 +15,6 @@ export const contactDetails = {
   phone: "(+63)967-574-0428",
   location: "General Trias, Cavite, Philippines — Remote friendly",
   github: "github.com/johncarlhonrado",
-  linkedin: "www.linkedin.com/in/honrado-john-carl-c-229908386",
+  linkedin: "https://www.linkedin.com/in/honrado-john-carl-c-229908386/",
   resumeUrl: "/JohnCarl_Honrado_Resume.pdf",
 };
