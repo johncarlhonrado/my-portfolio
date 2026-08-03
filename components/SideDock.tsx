@@ -1,7 +1,7 @@
-import { Github, Linkedin, Mail } from "lucide-react";
+import { Github, Linkedin, Mail, Facebook } from "lucide-react";
 import { socialLinks, contactDetails } from "@/constants/social";
 
-const ICONS = { github: Github, linkedin: Linkedin, twitter: Mail, mail: Mail };
+const ICONS = { github: Github, linkedin: Linkedin, facebook: Facebook, mail: Mail };
 
 /** Fixed floating social dock, visible on desktop only (hidden on mobile via CSS). */
 export default function SideDock() {
