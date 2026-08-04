@@ -21,11 +21,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "John Carl — Full-Stack Developer",
+  title: "John Carl Honrado",
   description:
     "John Carl is a full-stack developer building fast, accessible web applications with React, Next.js, TypeScript and Node.js.",
   openGraph: {
-    title: "John Carl — Full-Stack Developer",
+    title: "John Carl Honrado",
     description:
       "Portfolio of John Carl, a full-stack developer focused on performance, scalability and clean UX.",
     type: "website",
