@@ -86,7 +86,7 @@ export default function Hero() {
           <Reveal delay={0.05}>
             <h1>
               Hi, I&apos;m John Carl —<br />
-              <span className="accent-text">Full-Stack Developer.</span>
+              <span className="accent-text">Software Developer.</span>
             </h1>
           </Reveal>
 
