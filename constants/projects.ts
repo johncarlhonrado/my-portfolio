@@ -7,8 +7,15 @@ export interface Project {
   gradient: string;
   githubUrl: string;
   liveUrl: string;
-  type: "web" | "mobile";
+  type: "web" | "mobile" | "automation";
   screenshots: string[];
+
+  workflowJson?: string;
+
+  problem?: string;
+  howItWorks?: string;
+  aiUsage?: string;
+  integrations?: string[];
 }
 
 export const projects: Project[] = [
@@ -71,6 +78,82 @@ export const projects: Project[] = [
       "/projects/digi-cog/dg9.jpg"
     ],
   },
+  {
+  id: "gmail-automation",
+  title: "Multi-Label Gmail to Google Sheets & Drive Automation",
+  glyph: "n8n",
+  description:
+    "An n8n automation that processes labeled Gmail messages, records email information in Google Sheets, and automatically organizes email attachments in Google Drive using label, date, and sender-based folders.",
+  tech: [
+    "n8n",
+    "Gmail",
+    "Google Sheets",
+    "Google Drive"
+  ],
+  gradient: "linear-gradient(135deg,#EA4335,#7C2D12)",
+  githubUrl: "#",
+  liveUrl: "#",
+  type: "automation",
+  screenshots: [
+    "/projects/gmail-automation/workflow.jpg"
+  ],
+  workflowJson:
+    "/workflows/Workflow 1_ Multi-Label Gmail to Google Sheets & Drive Automation.json",
+  problem:
+    "Manually checking labeled Gmail messages, recording email information, and organizing attachments in Google Drive is repetitive and can lead to inconsistent file organization or duplicate folders.",
+  howItWorks:
+    "The workflow periodically checks Gmail for labeled messages, identifies the applicable label, processes the email information, and records the required data in Google Sheets. If the email contains attachments, they are downloaded and organized in Google Drive using a structured Label → Date → Sender folder hierarchy while avoiding duplicate folders.",
+  aiUsage:
+    "No AI is required for the core workflow. The automation focuses on reliable email processing, label-based routing, structured data handling, attachment management, and duplicate folder prevention.",
+  integrations: [
+    "Gmail",
+    "Google Sheets",
+    "Google Drive"
+  ]
+},
+{
+  id: "telegram-receipt",
+  title: "Telegram Receipt Processing & AI Data Extraction",
+  glyph: "n8n",
+  description:
+    "An n8n automation that receives receipt photos through Telegram, uses Google Gemini to extract key receipt information, saves the original image to Google Drive, and records the extracted data in Google Sheets.",
+  tech: [
+    "n8n",
+    "Telegram",
+    "Google Gemini",
+    "Google Drive",
+    "Google Sheets"
+  ],
+  gradient: "linear-gradient(135deg,#4285F4,#1E3A8A)",
+  githubUrl: "#",
+  liveUrl: "#",
+  type: "automation",
+  screenshots: [
+    "/projects/telegram-receipt/workflow.jpg"
+  ],
+  workflowJson:
+    "/workflows/Workflow 2_ Telegram Receipt Photo Processing.json",
+  problem:
+    "Manually transferring information from receipt photos into spreadsheets is repetitive and can introduce data-entry errors.",
+  howItWorks:
+    "A receipt photo is sent through Telegram. n8n receives the image, sends it to Google Gemini for structured extraction, saves the original receipt to Google Drive, and records the extracted information in Google Sheets.",
+  aiUsage:
+    "Google Gemini analyzes the receipt image and extracts structured information such as merchant name, total amount, and transaction date.",
+  integrations: [
+    "Telegram",
+    "Google Gemini",
+    "Google Drive",
+    "Google Sheets"
+  ]
+}
 ];
 
-export const filterTags = ["all", "React Native", "Next.js", "Express.js", "PostgreSQL", "MySQL"];
+export const filterTags = [
+  "all",
+  "React Native",
+  "Next.js",
+  "Express.js",
+  "PostgreSQL",
+  "MySQL",
+  "n8n",
+];

@@ -1,0 +1,568 @@
+{
+  "name": "Workflow 2: Telegram Receipt Photo Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "6711ab90-51d5-455f-9837-2ebba817e63c",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        576
+      ],
+      "webhookId": "REPLACE_WITH_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "GmiwB0TwbCFtgxOB",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-photo-1",
+              "leftValue": "={{ $json.message.photo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bce0d992-89ef-48f5-8651-e729830b40bc",
+      "name": "Check Photo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        576
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "25e1d903-b68c-4d56-8075-b7811083a877",
+      "name": "Ignore Non-Photo Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "37df2297-4598-4e74-bc71-2561ee1eb2ce",
+      "name": "Get Telegram File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        496
+      ],
+      "webhookId": "c97ab935-b0b0-4f78-9bc2-1a5fa44f60ef",
+      "credentials": {
+        "telegramApi": {
+          "id": "GmiwB0TwbCFtgxOB",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the input item\nconst item = items[0];\nconst response = item.json;\n\n// DEBUG: Log the full response to see what we're getting\nconsole.log('=== FULL RESPONSE ===');\nconsole.log(JSON.stringify(response, null, 2));\n\n// Extract text from the response - try multiple approaches\nlet rawText = '';\n\n// Approach 1: Look for candidates[0].content.parts\ntry {\n  if (response.candidates && response.candidates.length > 0) {\n    const candidate = response.candidates[0];\n    \n    // Check if candidate has content with parts\n    if (candidate.content && candidate.content.parts) {\n      const parts = candidate.content.parts;\n      console.log('Found parts array with length:', parts.length);\n      \n      // Look for the part without \"thought: true\"\n      for (let i = 0; i < parts.length; i++) {\n        const part = parts[i];\n        console.log(`Part ${i}:`, part);\n        \n        if (part.text && !part.thought) {\n          rawText = part.text;\n          console.log(`✅ Found non-thought text in part ${i}`);\n          break;\n        }\n      }\n      \n      // If no non-thought part found, use the last part\n      if (!rawText && parts.length > 0) {\n        const lastPart = parts[parts.length - 1];\n        if (lastPart.text) {\n          rawText = lastPart.text;\n          console.log('Using last part as fallback');\n        }\n      }\n    }\n    \n    // If candidate has text directly\n    if (!rawText && candidate.text) {\n      rawText = candidate.text;\n      console.log('Found text in candidate.text');\n    }\n    \n    // If candidate has output directly (some models use this)\n    if (!rawText && candidate.output) {\n      rawText = candidate.output;\n      console.log('Found text in candidate.output');\n    }\n  }\n} catch (e) {\n  console.error('Error extracting from candidates:', e);\n}\n\n// Approach 2: Check if response has content directly\nif (!rawText && response.content) {\n  try {\n    if (response.content.parts) {\n      const parts = response.content.parts;\n      for (const part of parts) {\n        if (part.text && !part.thought) {\n          rawText = part.text;\n          console.log('Found text in response.content.parts');\n          break;\n        }\n      }\n    }\n    if (!rawText && response.content.text) {\n      rawText = response.content.text;\n      console.log('Found text in response.content.text');\n    }\n  } catch (e) {\n    console.error('Error extracting from content:', e);\n  }\n}\n\n// Approach 3: Check if response has text directly\nif (!rawText && response.text) {\n  rawText = response.text;\n  console.log('Found text in response.text');\n}\n\n// Approach 4: Check if response is an array and get the first item\nif (!rawText && Array.isArray(response) && response.length > 0) {\n  try {\n    const firstItem = response[0];\n    if (firstItem.text) {\n      rawText = firstItem.text;\n      console.log('Found text in array[0].text');\n    } else if (typeof firstItem === 'string') {\n      rawText = firstItem;\n      console.log('Found string in array[0]');\n    }\n  } catch (e) {\n    console.error('Error extracting from array:', e);\n  }\n}\n\nconsole.log('=== RAW TEXT EXTRACTED ===');\nconsole.log('Length:', rawText.length);\nconsole.log('Preview:', rawText.substring(0, 200));\n\n// Clean up the text\nlet cleanText = rawText\n  .replace(/```json/gi, '')\n  .replace(/```/g, '')\n  .replace(/^json\\s*/i, '')\n  .trim();\n\nconsole.log('=== CLEAN TEXT ===');\nconsole.log('Length:', cleanText.length);\nconsole.log('Preview:', cleanText.substring(0, 200));\n\n// Try to find JSON in the text\nlet receipt = { \n  merchant_name: '', \n  amount: null, \n  subtotal: null,\n  date: '', \n  currency: '',\n  payment_method: ''\n};\n\nif (cleanText) {\n  console.log('=== PARSING JSON ===');\n  \n  // Try direct parse\n  try {\n    receipt = JSON.parse(cleanText);\n    console.log('✅ Successfully parsed JSON directly');\n  } catch (e) {\n    console.log('Direct parse failed, looking for JSON in text...');\n    \n    // Try to find JSON using regex\n    const jsonMatch = cleanText.match(/\\{[\\s\\S]*?\\}/);\n    if (jsonMatch) {\n      try {\n        const jsonStr = jsonMatch[0];\n        // Validate it's a proper JSON by checking if it has required fields\n        if (jsonStr.includes('merchant_name') || jsonStr.includes('amount')) {\n          receipt = JSON.parse(jsonStr);\n          console.log('✅ Successfully extracted JSON from text');\n        } else {\n          console.log('Found JSON but missing required fields');\n        }\n      } catch (e2) {\n        console.error('Failed to parse extracted JSON:', e2);\n      }\n    } else {\n      console.log('❌ No JSON found in text');\n      // Log the first 500 chars of cleanText for debugging\n      console.log('Clean text (first 500 chars):', cleanText.substring(0, 500));\n    }\n  }\n}\n\n// Log what we parsed\nconsole.log('=== PARSED RECEIPT ===');\nconsole.log(JSON.stringify(receipt, null, 2));\n\n// Extract and clean fields\nconst merchantName = String(receipt.merchant_name || '').trim();\nconst currency = String(receipt.currency || '').trim();\nconst receiptDate = String(receipt.date || '').trim();\nconst paymentMethod = String(receipt.payment_method || '').trim();\n\n// Parse amount\nlet amount = null;\nif (receipt.amount !== null && receipt.amount !== undefined && receipt.amount !== '') {\n  const parsed = typeof receipt.amount === 'number' \n    ? receipt.amount \n    : Number(String(receipt.amount).replace(/[^0-9.]/g, ''));\n  if (!isNaN(parsed) && parsed > 0 && isFinite(parsed)) {\n    amount = parsed;\n  }\n}\n\n// Parse subtotal\nlet subtotal = null;\nif (receipt.subtotal !== null && receipt.subtotal !== undefined && receipt.subtotal !== '') {\n  const parsed = typeof receipt.subtotal === 'number' \n    ? receipt.subtotal \n    : Number(String(receipt.subtotal).replace(/[^0-9.]/g, ''));\n  if (!isNaN(parsed) && parsed > 0 && isFinite(parsed)) {\n    subtotal = parsed;\n  }\n}\n\n// Get Telegram data\nlet telegramUser = '';\nlet chatId = '';\ntry {\n  const triggerNode = $('Telegram Trigger').first();\n  if (triggerNode?.json?.message) {\n    const message = triggerNode.json.message;\n    telegramUser = message.from?.username || message.from?.first_name || '';\n    chatId = message.chat?.id || '';\n  }\n} catch (e) {\n  console.error('Failed to get Telegram data:', e);\n}\n\n// Generate date and filename\nconst submissionDate = $now.toFormat('yyyy-LL-dd');\nlet fileName = '';\ntry {\n  const fileNode = $('Get Telegram File').first();\n  const filePath = fileNode?.json?.file_path || '';\n  fileName = filePath.split('/').pop() || `receipt_${submissionDate}_${$now.toFormat('HHmmss')}.jpg`;\n} catch (e) {\n  fileName = `receipt_${submissionDate}_${$now.toFormat('HHmmss')}.jpg`;\n}\n\n// Get binary data\nlet binaryData = {};\ntry {\n  const fileNode = $('Get Telegram File').first();\n  if (fileNode && fileNode.binary) {\n    binaryData = fileNode.binary;\n  }\n} catch (e) {\n  console.error('Failed to get binary data:', e);\n}\n\n// Return data\nreturn [{\n  json: {\n    merchantName,\n    amount,\n    subtotal,\n    receiptDate,\n    currency,\n    paymentMethod,\n    submissionDate,\n    fileName,\n    telegramUser,\n    chatId,\n    driveRootFolderId: '1oqlPMkotebBtn09ah2hl3gl9-W4zpsYg',\n    // Debug info to help identify the issue\n    _debug: {\n      rawTextLength: rawText.length,\n      cleanTextLength: cleanText.length,\n      hasMerchantName: !!merchantName,\n      receiptKeys: Object.keys(receipt)\n    }\n  },\n  binary: binaryData\n}];"
+      },
+      "id": "c4ffce95-c41b-4756-9007-8a50765e97ec",
+      "name": "Parse Receipt Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "=name = '{{ $json.submissionDate }}' and '{{ $json.driveRootFolderId }}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        "filter": {},
+        "options": {}
+      },
+      "id": "3c191656-af15-4504-b7e7-9a9938ee0b24",
+      "name": "Find Submission Date Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2560,
+        496
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get items from the Google Drive search\nconst items = $input.all();\n\n// Initialize variables\nlet folderExists = false;\nlet folderId = null;\nlet folderName = null;\n\n// Check if we have valid results\nif (items && items.length > 0) {\n    const firstItem = items[0];\n    \n    // Check if the item has a valid JSON structure with an ID\n    if (firstItem && firstItem.json && firstItem.json.id) {\n        folderExists = true;\n        folderId = firstItem.json.id;\n        folderName = firstItem.json.name || 'Unknown';\n    }\n}\n\n// IMPORTANT: Always return data, even when folder doesn't exist\nreturn [{\n    json: {\n        folderExists: folderExists,\n        folderId: folderId,\n        folderName: folderName,\n        // Pass through the original data needed for folder creation\n        submissionDate: $('Parse Receipt Data').first().json.submissionDate,\n        driveRootFolderId: $('Parse Receipt Data').first().json.driveRootFolderId,\n        // Debug info\n        debug: {\n            itemsReceived: items ? items.length : 0,\n            hasValidId: folderExists,\n            itemStructure: items && items.length > 0 ? Object.keys(items[0]) : []\n        }\n    }\n}];"
+      },
+      "id": "b547aea9-4033-4700-baaf-7b78827f2285",
+      "name": "Check Folder Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "folder-exists-1",
+              "leftValue": "={{ $json.folderExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3b06341d-f298-42f9-934d-d2d263f671e6",
+      "name": "Folder Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const receiptItem = $('Parse Receipt Data').item;\nconst folderId = $input.item.json.folderId || $input.item.json.id;\n\nreturn [{\n  json: {\n    ...receiptItem.json,\n    folderId\n  },\n  binary: receiptItem.binary\n}];"
+      },
+      "id": "ebbed720-3d7b-4d6a-932a-ae1a26abc306",
+      "name": "Attach Photo Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "mode": "id",
+          "value": "={{ $json.folderId }}"
+        },
+        "options": {}
+      },
+      "id": "9ad9b144-78fb-4891-9184-02d8951c4838",
+      "name": "Upload Receipt to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3632,
+        496
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1iZdu6vUPpeXI6f5qNRSypn0zci9hs4qOmHWybPNH3gA",
+          "mode": "list",
+          "cachedResultName": "Telegram Receipt Photo Processing",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iZdu6vUPpeXI6f5qNRSypn0zci9hs4qOmHWybPNH3gA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iZdu6vUPpeXI6f5qNRSypn0zci9hs4qOmHWybPNH3gA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Submission Date": "={{ $('Attach Photo Binary').item.json.submissionDate }}",
+            "Receipt Date": "={{ $('Attach Photo Binary').item.json.receiptDate }}",
+            "Merchant Name": "={{ $('Attach Photo Binary').item.json.merchantName }}",
+            "Amount": "={{ $('Attach Photo Binary').item.json.amount }}",
+            "Currency": "={{ $('Attach Photo Binary').item.json.currency }}",
+            "Telegram User": "={{ $('Attach Photo Binary').item.json.telegramUser }}",
+            "Telegram Chat ID": "={{ $('Attach Photo Binary').item.json.chatId }}",
+            "File Name": "={{ $('Attach Photo Binary').item.json.fileName }}",
+            "Google Drive Link": "={{ $json.webViewLink }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Submission Date",
+              "displayName": "Submission Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Receipt Date",
+              "displayName": "Receipt Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Merchant Name",
+              "displayName": "Merchant Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Amount",
+              "displayName": "Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Currency",
+              "displayName": "Currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telegram User",
+              "displayName": "Telegram User",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telegram Chat ID",
+              "displayName": "Telegram Chat ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File Name",
+              "displayName": "File Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Google Drive Link",
+              "displayName": "Google Drive Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "32a4c996-8d09-465a-bf9e-ae0fed07e52a",
+      "name": "Append Receipt to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3824,
+        496
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "KFpJsaMmxjqXdVTi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.submissionDate }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1oqlPMkotebBtn09ah2hl3gl9-W4zpsYg",
+          "mode": "list",
+          "cachedResultName": "Telegram Receipt Photos",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1oqlPMkotebBtn09ah2hl3gl9-W4zpsYg"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3184,
+        656
+      ],
+      "id": "ad8aabb0-48ee-490e-8fcd-8582099352b0",
+      "name": "Create folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemma-4-26b-a4b-it",
+          "mode": "list",
+          "cachedResultName": "models/gemma-4-26b-a4b-it"
+        },
+        "text": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"You are a receipt data extraction system. Your ONLY task is to extract specific fields from the receipt image and return them in JSON format.\\n\\nIMPORTANT: You MUST return ONLY valid JSON. Do NOT include any explanations, descriptions, markdown, or text outside the JSON object.\\n\\nExtract these exact fields:\\n1. merchant_name: The business/store name\\n2. amount: The total amount paid (number, no currency symbol)\\n3. subtotal: Amount before tax and service charges (number, no currency symbol)\\n4. date: The purchase date\\n5. currency: Currency symbol or code ($, ₱, €, GBP, USD, PHP, etc.)\\n6. payment_method: Cash, Credit Card, etc.\\n\\nCRITICAL RULES:\\n- Return ONLY this exact JSON structure: {\\\"merchant_name\\\":\\\"\\\",\\\"amount\\\":null,\\\"subtotal\\\":null,\\\"date\\\":\\\"\\\",\\\"currency\\\":\\\"\\\",\\\"payment_method\\\":\\\"\\\"}\\n- Use null for missing numbers\\n- Use empty string \\\"\\\" for missing text\\n- NO markdown, NO backticks, NO explanations\\n- The amount should be the final total the customer paid\\n- Look for currency symbols like $, ₱, €\\n\\nExample of valid response: {\\\"merchant_name\\\":\\\"IKKORYU FUKUOKA RAMEN\\\",\\\"amount\\\":1056.00,\\\"subtotal\\\":960.00,\\\"date\\\":\\\"02 Dec 15\\\",\\\"currency\\\":\\\"₱\\\",\\\"payment_method\\\":\\\"Cash\\\"}\\n\\nRemember: ONLY return the JSON object. Nothing else.\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"image/jpeg\",\n            \"data\": \"{{ $binary.data.data }}\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2144,
+        496
+      ],
+      "id": "ca39a5a8-060a-443a-9ae4-cf3f9096bbcd",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "VfhVQzwYbg5kDRhr",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Photo": {
+      "main": [
+        [
+          {
+            "node": "Get Telegram File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Non-Photo Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Telegram File": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Receipt Data": {
+      "main": [
+        [
+          {
+            "node": "Find Submission Date Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Submission Date Folder": {
+      "main": [
+        [
+          {
+            "node": "Check Folder Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Folder Exists": {
+      "main": [
+        [
+          {
+            "node": "Folder Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Folder Exists?": {
+      "main": [
+        [
+          {
+            "node": "Attach Photo Binary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Photo Binary": {
+      "main": [
+        [
+          {
+            "node": "Upload Receipt to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Receipt to Drive": {
+      "main": [
+        [
+          {
+            "node": "Append Receipt to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder": {
+      "main": [
+        [
+          {
+            "node": "Attach Photo Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Parse Receipt Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "63d71ac3-ebd0-4957-aca4-f6eb5454463c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "892924fc5714d3ece0cbf19283055b00d6e1067d642ef8f396c09c8c607803c2"
+  },
+  "nodeGroups": [],
+  "id": "EgOqKwSUAv0f7I7r",
+  "tags": []
+}

@@ -1,0 +1,1231 @@
+{
+  "name": "Workflow 1: Multi-Label Gmail to Google Sheets & Drive Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1440,
+        160
+      ],
+      "id": "2c8c12d6-13b3-41ba-9297-aa52e6e0c91b",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b5588962-ead5-4327-9a1a-74998c7a7dcc",
+              "name": "gmailLabels",
+              "value": "label1,label2,label3",
+              "type": "string"
+            },
+            {
+              "id": "60cfba7d-a392-419f-94b6-c11049c23ec7",
+              "name": "driveRootFolderId",
+              "value": "1K02ufmldzGdyqhPAeX7QUHOFWin5mpi0",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1200,
+        160
+      ],
+      "id": "6009c5eb-4e3c-40fd-b8aa-b80a6d10f652",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw",
+          "mode": "list",
+          "cachedResultName": "Multi-Label Gmail to Google Sheets & Drive Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -960,
+        64
+      ],
+      "id": "af39db3f-6fad-4921-8bee-346240047101",
+      "name": "Get Existing Message IDs",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "KFpJsaMmxjqXdVTi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ids = $input.all()\n  .map(item => item.json['Message ID'])\n  .filter(Boolean);\n\nreturn [{ json: { existingIds: ids } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        64
+      ],
+      "id": "85a82b15-9a42-404a-bc84-3ad79a2e7682",
+      "name": "Collect Existing IDs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "simple": false,
+        "filters": {
+          "q": "={{ 'label:' + $('Config').first().json.gmailLabels.split(',').map(l => l.trim()).filter(l => l.length).join(' OR label:') }}"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        64
+      ],
+      "id": "14cab20d-dd1e-48ba-99fe-461226929505",
+      "name": "Get Gmail Messages",
+      "alwaysOutputData": true,
+      "webhookId": "5f11194d-4240-45a2-b1a8-fa547d9d2c5d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sHzEH0EVKzBEb1Kk",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Config').first().json;\nconst configLabels = (config.gmailLabels || '')\n  .split(',')\n  .map(l => l.trim())\n  .filter(Boolean);\n\nconst existingIds = new Set(\n  ($('Collect Existing IDs').first().json.existingIds || [])\n);\n\nconst labelIdToName = new Map(\n  $('Get Gmail Labels').all().map(item => [item.json.id, item.json.name])\n);\n\nconst systemLabelPrefixes = ['CATEGORY_', 'UNREAD', 'IMPORTANT', 'STARRED', 'DRAFT', 'SENT', 'SPAM', 'TRASH', 'INBOX'];\n\nfunction extractSender(json) {\n  let name = '';\n  let email = '';\n  const from = json.from;\n\n  if (from) {\n    if (from.value && Array.isArray(from.value) && from.value.length) {\n      name = from.value[0].name || '';\n      email = from.value[0].address || '';\n    } else if (Array.isArray(from) && from.length) {\n      name = from[0].name || '';\n      email = from[0].address || '';\n    } else if (typeof from === 'object' && !Array.isArray(from)) {\n      name = from.name || '';\n      email = from.address || '';\n    } else if (typeof from === 'string') {\n      const match = from.match(/^(.*?)<([^>]+)>\\s*$/);\n      if (match) {\n        name = match[1].trim().replace(/^\"|\"$/g, '');\n        email = match[2].trim();\n      } else {\n        email = from.trim();\n      }\n    }\n  }\n\n  if (!email && typeof json.From === 'string') {\n    const match = json.From.match(/^(.*?)<([^>]+)>\\s*$/);\n    if (match) {\n      if (!name) name = match[1].trim().replace(/^\"|\"$/g, '');\n      email = match[2].trim();\n    } else if (!email) {\n      email = json.From.trim();\n    }\n  }\n\n  if (!name && email) name = email.split('@')[0];\n  if (!name) name = 'Unknown Sender';\n\n  return { name, email };\n}\n\nfunction sanitizeFolderName(name) {\n  if (!name) return 'Unknown Sender';\n  const cleaned = name.replace(/[\\\\/:*?\"<>|]/g, '_').trim();\n  return cleaned.length ? cleaned : 'Unknown Sender';\n}\n\nfunction resolveLabelNames(json) {\n  if (Array.isArray(json.labelIds) && json.labelIds.length) {\n    return json.labelIds.map(id => labelIdToName.get(id) || id);\n  }\n  if (Array.isArray(json.labels) && json.labels.length) {\n    return json.labels.map(l => (l && (l.name || l.id)) || '').filter(Boolean);\n  }\n  return [];\n}\n\nfunction detectLabel(json) {\n  const labelNames = resolveLabelNames(json);\n  const match = labelNames.find(n => configLabels.some(cfg => cfg.toLowerCase() === String(n).toLowerCase()));\n  if (match) {\n    return configLabels.find(cfg => cfg.toLowerCase() === String(match).toLowerCase());\n  }\n  const custom = labelNames.find(n => !systemLabelPrefixes.some(p => String(n).toUpperCase().startsWith(p)));\n  return custom || 'uncategorized';\n}\n\nfunction formatDate(json) {\n  let d;\n  if (json.internalDate) {\n    const ts = Number(json.internalDate);\n    if (!Number.isNaN(ts)) d = new Date(ts);\n  }\n  if (!d && json.Date) {\n    const parsed = new Date(json.Date);\n    if (!Number.isNaN(parsed.getTime())) d = parsed;\n  }\n  if (!d) d = new Date();\n  return d.toISOString().slice(0, 10);\n}\n\nconst results = [];\nconst inputItems = $input.all();\n\nfor (let i = 0; i < inputItems.length; i++) {\n  const item = inputItems[i];\n  const json = item.json;\n  const messageId = json.id;\n\n  if (!messageId || existingIds.has(messageId)) continue;\n\n  const sender = extractSender(json);\n  const label = detectLabel(json);\n  const dateReceived = formatDate(json);\n  const subject = json.Subject || json.subject || '(no subject)';\n\n  // Dedupe attachments by filename + size\n  const binary = item.binary || {};\n  const seen = new Map();\n  for (const key of Object.keys(binary)) {\n    const b = binary[key];\n    const fileName = b.fileName || key;\n    const dedupeKey = fileName + ':' + (b.fileSize || '');\n    if (!seen.has(dedupeKey)) {\n      seen.set(dedupeKey, { key, fileName });\n    }\n  }\n\n  const attachmentEntries = Array.from(seen.values());\n  const hasAttachments = attachmentEntries.length > 0 ? 'Yes' : 'No';\n\n  results.push({\n    json: {\n      messageId,\n      subject,\n      label,\n      senderName: sender.name,\n      senderEmail: sender.email,\n      dateReceived,\n      hasAttachments,\n      attachmentCount: attachmentEntries.length,\n      attachmentFilenames: attachmentEntries.map(a => a.fileName).join(', '),\n      senderFolderName: sanitizeFolderName(sender.name),\n      _attachmentKeys: attachmentEntries.map(a => a.key),\n    },\n    binary: item.binary,\n    pairedItem: { item: i },\n  });\n}\n\n// Nothing new to log/process this run\nif (results.length === 0) {\n  return [];\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        64
+      ],
+      "id": "084f78ef-4e94-4eb0-9314-29f7312dc675",
+      "name": "Normalize and Filter New Emails"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw",
+          "mode": "list",
+          "cachedResultName": "Multi-Label Gmail to Google Sheets & Drive Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1M_iZZyzkCF7gcbUxN9ZZtnGKWm-skySK4TOz7KR-pWw/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Message ID": "={{ $json.messageId }}",
+            "Subject": "={{ $json.subject }}",
+            "Label": "={{ $json.label }}",
+            "Sender Name": "={{ $json.senderName }}",
+            "Sender Email": "={{ $json.senderEmail }}",
+            "Date Received": "={{ $json.dateReceived }}",
+            "Has Attachments": "={{ $json.hasAttachments }}",
+            "Attachment Count": "={{ $json.attachmentCount }}",
+            "Attachment Filenames": "={{ $json.attachmentFilenames }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Label",
+              "displayName": "Label",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sender Name",
+              "displayName": "Sender Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sender Email",
+              "displayName": "Sender Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date Received",
+              "displayName": "Date Received",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Has Attachments",
+              "displayName": "Has Attachments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Attachment Count",
+              "displayName": "Attachment Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Attachment Filenames",
+              "displayName": "Attachment Filenames",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        0
+      ],
+      "id": "50e5ebe6-cd3e-4bd4-8742-04daa2165215",
+      "name": "Append row in sheet",
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "KFpJsaMmxjqXdVTi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "36de7774-1299-403c-853a-013654f961ec",
+              "leftValue": "={{ $json.hasAttachments }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        128
+      ],
+      "id": "6a0c05fb-4c07-40e7-8bc9-869a7fbc4983",
+      "name": "Has Attachments?"
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -960,
+        288
+      ],
+      "id": "30739021-faac-4f84-9f02-1a92f8b48236",
+      "name": "Get Gmail Labels",
+      "alwaysOutputData": true,
+      "webhookId": "fdbef0f6-f1c2-4048-9170-bc3a23645776",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sHzEH0EVKzBEb1Kk",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "={{ (() => {\n  const rootId = ($('Config').first().json.driveRootFolderId).toString().trim();\n  return `'${rootId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;\n})() }}",
+        "returnAll": true,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $('Config').first().json.driveRootFolderId }}",
+            "mode": "id"
+          },
+          "whatToSearch": "folders",
+          "includeTrashed": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -960,
+        320
+      ],
+      "id": "6989c80e-1245-4ece-a9a3-17dca1501427",
+      "name": "Get Existing Label Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns each email into one item per attachment, all sharing the same\n// destinationFolderId. This node's input comes from a merged registry\n// item, so pairedItem back to the original email isn't reliable -\n// match by messageId instead.\nconst results = [];\nconst mimeToExt = {\n  'image/jpeg': '.jpg',\n  'image/jpg': '.jpg',\n  'image/png': '.png',\n  'image/gif': '.gif',\n  'image/webp': '.webp',\n  'application/pdf': '.pdf',\n  'text/plain': '.txt',\n  'application/msword': '.doc',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',\n  'application/vnd.ms-excel': '.xls',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',\n  'application/vnd.ms-powerpoint': '.ppt',\n  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx'\n};\n\nconst emailByMessageId = new Map();\nfor (const emailItem of $('Normalize and Filter New Emails').all()) {\n  emailByMessageId.set(emailItem.json.messageId, emailItem);\n}\n\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const folderItem = items[i];\n  const source = emailByMessageId.get(folderItem.json.messageId);\n  if (!source) continue;\n\n  const json = source.json;\n  const binary = source.binary || {};\n  const keys = json._attachmentKeys || [];\n  const destinationFolderId = folderItem.json.senderFolderId;\n\n  for (const key of keys) {\n    if (!binary[key]) continue;\n    const binaryData = binary[key];\n    let fileName = binaryData.fileName || key || 'file';\n    const mimeType = binaryData.mimeType || 'application/octet-stream';\n    if (!fileName.includes('.')) {\n      const ext = mimeToExt[mimeType] || '';\n      fileName = fileName + ext;\n    }\n    results.push({\n      json: {\n        messageId: json.messageId,\n        label: json.label,\n        dateReceived: json.dateReceived,\n        senderFolderName: json.senderFolderName,\n        filename: fileName,\n        mimeType: mimeType,\n        fileSize: binaryData.fileSize,\n        destinationFolderId: destinationFolderId,\n        originalKey: key\n      },\n      binary: {\n        data: binaryData\n      },\n      pairedItem: { item: i },\n    });\n  }\n}\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2704,
+        256
+      ],
+      "id": "6ab2d327-625b-4a34-bb90-741af2508b20",
+      "name": "Explode Attachments",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "=data",
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.destinationFolderId }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2880,
+        256
+      ],
+      "id": "111ec135-da45-435c-8589-28cd70630333",
+      "name": "Upload Attachment",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collapse into one item so the Date/Sender folder lookups run once per run\nreturn [{ json: { labelFolders: $input.all().map(i => i.json).filter(f => f && f.id) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        320
+      ],
+      "id": "4d90c819-414f-42f2-bba1-e5a1edee192a",
+      "name": "Collect Label Folder List"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ (() => {\n  const labelIds = ($('Collect Label Folder List').first().json.labelFolders || []).map(f => f.id).filter(Boolean);\n  if (!labelIds.length) {\n    return \"name = '__no_label_folders_yet__' and trashed = false\";\n  }\n  const parentClause = labelIds.map(id => `'${id}' in parents`).join(' or ');\n  return `(${parentClause}) and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;\n})() }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,parents)"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "corpora",
+              "value": "allDrives"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        320
+      ],
+      "id": "9f7a90b4-15ba-4666-8317-1dfc22041b05",
+      "name": "Get Existing Date Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten the HTTP response into the same shape as the label folder list\nconst body = $input.first().json;\nreturn [{ json: { dateFolders: (body.files || []).filter(f => f && f.id) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        320
+      ],
+      "id": "53fb1a69-8e2c-4fab-97f1-b262c305b534",
+      "name": "Collect Date Folder List"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ (() => {\n  const dateIds = ($('Collect Date Folder List').first().json.dateFolders || []).map(f => f.id).filter(Boolean);\n  if (!dateIds.length) {\n    return \"name = '__no_date_folders_yet__' and trashed = false\";\n  }\n  const parentClause = dateIds.map(id => `'${id}' in parents`).join(' or ');\n  return `(${parentClause}) and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;\n})() }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,parents)"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "corpora",
+              "value": "allDrives"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        320
+      ],
+      "id": "8aa0162a-00e7-4a69-87e3-6cffe24ec8f4",
+      "name": "Get Existing Sender Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nreturn [{ json: { senderFolders: (body.files || []).filter(f => f && f.id) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        320
+      ],
+      "id": "b24e65b2-14df-46c2-ab1f-149a5dfcd3ef",
+      "name": "Collect Sender Folder List"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a label -> date -> sender folder registry from existing Drive\n// folders. Keys are normalized (trim + lowercase); if duplicate folders\n// already exist, the first one found is kept.\n\nconst labelFolders = ($('Collect Label Folder List').first().json.labelFolders) || [];\nconst dateFolders = ($('Collect Date Folder List').first().json.dateFolders) || [];\nconst senderFolders = ($('Collect Sender Folder List').first().json.senderFolders) || [];\n\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst registry = {};\n\nfor (const f of labelFolders) {\n  if (!f || !f.name || !f.id) continue;\n  const key = norm(f.name);\n  if (!registry[key]) {\n    registry[key] = { id: f.id, name: String(f.name).trim(), dates: {} };\n  }\n}\n\nconst labelIdToKey = {};\nfor (const key of Object.keys(registry)) labelIdToKey[registry[key].id] = key;\n\nfor (const f of dateFolders) {\n  if (!f || !f.name || !f.id) continue;\n  const parents = f.parents || [];\n  const parentLabelKey = parents.map(p => labelIdToKey[p]).find(Boolean);\n  if (!parentLabelKey) continue;\n  const dateKey = String(f.name).trim();\n  const labelEntry = registry[parentLabelKey];\n  if (!labelEntry.dates[dateKey]) {\n    labelEntry.dates[dateKey] = { id: f.id, name: dateKey, senders: {} };\n  }\n}\n\nconst dateIdToLocation = {};\nfor (const labelKey of Object.keys(registry)) {\n  for (const dateKey of Object.keys(registry[labelKey].dates)) {\n    dateIdToLocation[registry[labelKey].dates[dateKey].id] = { labelKey, dateKey };\n  }\n}\n\nfor (const f of senderFolders) {\n  if (!f || !f.name || !f.id) continue;\n  const parents = f.parents || [];\n  const loc = parents.map(p => dateIdToLocation[p]).find(Boolean);\n  if (!loc) continue;\n  const senderKey = norm(f.name);\n  const dateEntry = registry[loc.labelKey].dates[loc.dateKey];\n  if (!(senderKey in dateEntry.senders)) {\n    dateEntry.senders[senderKey] = f.id;\n  }\n}\n\nreturn [{ json: { registry } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "d927ba31-ea6c-4f60-8718-13f01e061e62",
+      "name": "Build Folder Registry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per label not already in the registry, deduped\nconst registry = $('Build Folder Registry').first().json.registry;\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst emails = $input.all();\nconst seen = new Set();\nconst missing = [];\nfor (const item of emails) {\n  const label = item.json.label;\n  const key = norm(label);\n  if (!key || seen.has(key)) continue;\n  seen.add(key);\n  if (!registry[key]) {\n    missing.push({ json: { labelKey: key, labelName: String(label).trim() } });\n  }\n}\n\n// Nothing missing - emit a placeholder so downstream nodes still run\nif (missing.length === 0) {\n  return [{ json: { __kind: 'skip' } }];\n}\nreturn missing;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        256
+      ],
+      "id": "643b0137-ec85-42ed-a5c8-8dedc8be6c9f",
+      "name": "Determine Missing Label Folders"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.labelName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Config').first().json.driveRootFolderId }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        608,
+        368
+      ],
+      "id": "fef48910-84ed-40aa-926a-d376eebbb857",
+      "name": "Create Missing Label Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fold newly created label folders back into the registry in memory\nconst registry = JSON.parse(JSON.stringify($('Build Folder Registry').first().json.registry));\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst created = $input.all();\nfor (const item of created) {\n  const name = item.json.name;\n  const id = item.json.id;\n  if (!name || !id) continue;\n  const key = norm(name);\n  if (!registry[key]) {\n    registry[key] = { id, name: String(name).trim(), dates: {} };\n  }\n}\nreturn [{ json: { registry } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        256
+      ],
+      "id": "77963b55-44aa-44fe-83fd-b3ace612b223",
+      "name": "Merge Label Registry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unique (label, date) pairs missing from the registry\nconst registry = $input.first().json.registry;\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst emails = $('Normalize and Filter New Emails').all().filter(i => i.json.hasAttachments === 'Yes');\nconst seen = new Set();\nconst missing = [];\nfor (const item of emails) {\n  const labelKey = norm(item.json.label);\n  const dateKey = String(item.json.dateReceived).trim();\n  const targetKey = labelKey + '::' + dateKey;\n  if (seen.has(targetKey)) continue;\n  seen.add(targetKey);\n  const labelEntry = registry[labelKey];\n  if (!labelEntry) continue;\n  if (!labelEntry.dates[dateKey]) {\n    missing.push({ json: { labelKey, labelFolderId: labelEntry.id, dateKey } });\n  }\n}\n\n// Nothing missing - emit a placeholder so downstream nodes still run\nif (missing.length === 0) {\n  return [{ json: { __kind: 'skip' } }];\n}\nreturn missing;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        256
+      ],
+      "id": "1b66ed38-91c0-482e-90f7-982150ea92ee",
+      "name": "Determine Missing Date Folders"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.dateKey }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.labelFolderId }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1344,
+        368
+      ],
+      "id": "e784e5e1-ca6c-4b3b-922f-b473434e3974",
+      "name": "Create Missing Date Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const registry = JSON.parse(JSON.stringify($('Merge Label Registry').first().json.registry));\nconst createdItems = $input.all();\nconst missingTargets = $('Determine Missing Date Folders').all();\n\nfor (let i = 0; i < createdItems.length; i++) {\n  const created = createdItems[i].json;\n  const target = missingTargets[i] ? missingTargets[i].json : null;\n  if (!target || !created || !created.id) continue;\n  const labelEntry = registry[target.labelKey];\n  if (!labelEntry) continue;\n  if (!labelEntry.dates[target.dateKey]) {\n    labelEntry.dates[target.dateKey] = { id: created.id, name: target.dateKey, senders: {} };\n  }\n}\nreturn [{ json: { registry } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        256
+      ],
+      "id": "f9f40af4-7696-48a2-8d30-cb0236230015",
+      "name": "Merge Date Registry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unique (label, date, sender) triples missing from the registry\nconst registry = $input.first().json.registry;\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst emails = $('Normalize and Filter New Emails').all().filter(i => i.json.hasAttachments === 'Yes');\nconst seen = new Set();\nconst missing = [];\nfor (const item of emails) {\n  const labelKey = norm(item.json.label);\n  const dateKey = String(item.json.dateReceived).trim();\n  const senderKey = norm(item.json.senderFolderName);\n  const targetKey = labelKey + '::' + dateKey + '::' + senderKey;\n  if (seen.has(targetKey)) continue;\n  seen.add(targetKey);\n  const labelEntry = registry[labelKey];\n  const dateEntry = labelEntry && labelEntry.dates[dateKey];\n  if (!dateEntry) continue;\n  if (!(senderKey in dateEntry.senders)) {\n    missing.push({ json: { labelKey, dateKey, dateFolderId: dateEntry.id, senderKey, senderFolderName: item.json.senderFolderName } });\n  }\n}\n\n// Nothing missing - emit a placeholder so downstream nodes still run\nif (missing.length === 0) {\n  return [{ json: { __kind: 'skip' } }];\n}\nreturn missing;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        256
+      ],
+      "id": "62470125-c33e-406d-8d1c-f98295743988",
+      "name": "Determine Missing Sender Folders"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.senderFolderName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.dateFolderId }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2128,
+        368
+      ],
+      "id": "0a6fd644-e9d7-471c-9a3c-129c55e055c8",
+      "name": "Create Missing Sender Folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lfl3jqakyUm3EKd7",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const registry = JSON.parse(JSON.stringify($('Merge Date Registry').first().json.registry));\nconst createdItems = $input.all();\nconst missingTargets = $('Determine Missing Sender Folders').all();\n\nfor (let i = 0; i < createdItems.length; i++) {\n  const created = createdItems[i].json;\n  const target = missingTargets[i] ? missingTargets[i].json : null;\n  if (!target || !created || !created.id) continue;\n  const labelEntry = registry[target.labelKey];\n  const dateEntry = labelEntry && labelEntry.dates[target.dateKey];\n  if (!dateEntry) continue;\n  if (!(target.senderKey in dateEntry.senders)) {\n    dateEntry.senders[target.senderKey] = created.id;\n  }\n}\nreturn [{ json: { registry } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        256
+      ],
+      "id": "c95aa8f5-433e-4532-b071-fac1c2c88739",
+      "name": "Merge Sender Registry"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Attach the resolved sender folder id to each new email (once per\n// email, not per attachment). Explode Attachments matches attachments\n// back to these by messageId.\nconst registry = $input.first().json.registry;\nfunction norm(s) { return String(s == null ? '' : s).trim().toLowerCase(); }\n\nconst emails = $('Normalize and Filter New Emails').all();\nconst results = [];\n\nfor (let i = 0; i < emails.length; i++) {\n  const item = emails[i];\n  if (item.json.hasAttachments !== 'Yes') continue;\n\n  const labelKey = norm(item.json.label);\n  const dateKey = String(item.json.dateReceived).trim();\n  const senderKey = norm(item.json.senderFolderName);\n\n  const labelEntry = registry[labelKey];\n  const dateEntry = labelEntry && labelEntry.dates[dateKey];\n  const senderFolderId = dateEntry && dateEntry.senders[senderKey];\n\n  if (!senderFolderId) {\n    // Skip rather than guess if the folder wasn't resolved\n    continue;\n  }\n\n  results.push({\n    json: {\n      messageId: item.json.messageId,\n      label: item.json.label,\n      dateReceived: item.json.dateReceived,\n      senderFolderName: item.json.senderFolderName,\n      senderFolderId,\n    },\n    // Input here is a single merged registry item, so pairedItem is always 0.\n    // Downstream matching is done by messageId (see Explode Attachments).\n    pairedItem: { item: 0 },\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2512,
+        256
+      ],
+      "id": "b3f4d53c-4359-42b0-a83e-43a70ca899d5",
+      "name": "Map Emails to Resolved Folders"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "513de95b-2670-447f-a1bd-df28d30d145e",
+              "leftValue": "={{ $json.__kind }}",
+              "rightValue": "skip",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        256
+      ],
+      "id": "53fb22a5-40fb-4315-a87b-e4879ddf2d76",
+      "name": "Has Missing Label Folders?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "01aa5565-4880-4d76-b9c8-c24395cb2aed",
+              "leftValue": "={{ $json.__kind }}",
+              "rightValue": "skip",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        256
+      ],
+      "id": "21fdeb52-c5a8-405f-8cbf-de87cadcf9fb",
+      "name": "Has Missing Date Folders?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "69855308-d92e-4634-b907-7a703f3fb422",
+              "leftValue": "={{ $json.__kind }}",
+              "rightValue": "skip",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        256
+      ],
+      "id": "2679da23-5878-4bef-bb80-2cec430d29ff",
+      "name": "Has Missing Sender Folders?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Label Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Label Folders": {
+      "main": [
+        [
+          {
+            "node": "Collect Label Folder List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Label Folder List": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Date Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Date Folders": {
+      "main": [
+        [
+          {
+            "node": "Collect Date Folder List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Date Folder List": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Sender Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Sender Folders": {
+      "main": [
+        [
+          {
+            "node": "Collect Sender Folder List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Sender Folder List": {
+      "main": [
+        [
+          {
+            "node": "Build Folder Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Folder Registry": {
+      "main": [
+        [
+          {
+            "node": "Get Gmail Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Gmail Labels": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Message IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Message IDs": {
+      "main": [
+        [
+          {
+            "node": "Collect Existing IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Existing IDs": {
+      "main": [
+        [
+          {
+            "node": "Get Gmail Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Gmail Messages": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Filter New Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Filter New Emails": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Attachments?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Attachments?": {
+      "main": [
+        [
+          {
+            "node": "Determine Missing Label Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Missing Label Folders": {
+      "main": [
+        [
+          {
+            "node": "Has Missing Label Folders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Missing Label Folders": {
+      "main": [
+        [
+          {
+            "node": "Merge Label Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Label Registry": {
+      "main": [
+        [
+          {
+            "node": "Determine Missing Date Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Missing Date Folders": {
+      "main": [
+        [
+          {
+            "node": "Has Missing Date Folders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Missing Date Folders": {
+      "main": [
+        [
+          {
+            "node": "Merge Date Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Date Registry": {
+      "main": [
+        [
+          {
+            "node": "Determine Missing Sender Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Missing Sender Folders": {
+      "main": [
+        [
+          {
+            "node": "Has Missing Sender Folders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Missing Sender Folders": {
+      "main": [
+        [
+          {
+            "node": "Merge Sender Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Sender Registry": {
+      "main": [
+        [
+          {
+            "node": "Map Emails to Resolved Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Emails to Resolved Folders": {
+      "main": [
+        [
+          {
+            "node": "Explode Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Attachments": {
+      "main": [
+        [
+          {
+            "node": "Upload Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Missing Label Folders?": {
+      "main": [
+        [
+          {
+            "node": "Merge Label Registry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Missing Label Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Missing Date Folders?": {
+      "main": [
+        [
+          {
+            "node": "Merge Date Registry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Missing Date Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Missing Sender Folders?": {
+      "main": [
+        [
+          {
+            "node": "Merge Sender Registry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Missing Sender Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9fcdad2e-d35b-4c8f-87fd-391252d8bf83",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "892924fc5714d3ece0cbf19283055b00d6e1067d642ef8f396c09c8c607803c2"
+  },
+  "nodeGroups": [],
+  "id": "IKIlqpnE5mmk7DOF",
+  "tags": []
+}
