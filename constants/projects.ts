@@ -53,7 +53,13 @@ export const projects: Project[] = [
     githubUrl: "https://github.com/johncarlhonrado/Starkson-It-Support-and-Incident-Reporting.git",
     liveUrl: "#",
     type: "web",
-    screenshots: []
+    screenshots: ["projects/starkson/ss1.jpg",
+      "projects/starkson/ss2.jpg",
+      "projects/starkson/ss3.jpg",
+      "projects/starkson/ss4.jpg",
+      "projects/starkson/ss5.jpg",
+      "projects/starkson/ss6.jpg",
+    ],
 
   },
   {
@@ -95,7 +101,7 @@ export const projects: Project[] = [
   liveUrl: "#",
   type: "automation",
   screenshots: [
-    "/projects/gmail-automation/workflow.jpg"
+    "/projects/workflow1.jpg"
   ],
   workflowJson:
     "/workflows/Workflow 1_ Multi-Label Gmail to Google Sheets & Drive Automation.json",
@@ -129,7 +135,7 @@ export const projects: Project[] = [
   liveUrl: "#",
   type: "automation",
   screenshots: [
-    "/projects/telegram-receipt/workflow.jpg"
+    "/projects/workflow2.jpg"
   ],
   workflowJson:
     "/workflows/Workflow 2_ Telegram Receipt Photo Processing.json",
